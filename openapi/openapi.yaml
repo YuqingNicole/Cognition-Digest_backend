@@ -1,0 +1,200 @@
+openapi: 3.1.0
+info:
+  title: Cognition Digest API
+  version: 0.1.0
+  description: |
+    OpenAPI contract inferred from the current Cognition Digest frontend integration.
+    Update this document whenever the frontend begins to rely on new endpoints or fields.
+servers:
+  - url: http://localhost:3000
+    description: Local Next.js development server
+  - url: https://{domain}
+    description: Production deployment
+    variables:
+      domain:
+        default: example.com
+        description: Hostname where the app is deployed
+security:
+  - bearerAuth: []
+  - cookieAuth: []
+paths:
+  /api/report/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ReportId'
+    get:
+      summary: Fetch a report by identifier
+      operationId: getReport
+      description: |
+        Returns a placeholder envelope that will eventually contain the report data
+        requested by the frontend dashboard. Until persistence is implemented the
+        `report`  field may be `null` .
+      responses:
+        '200':
+          description: Report envelope returned successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetReportResponse'
+              examples:
+                example:
+                  value:
+                    id: r-123
+                    report:
+                      id: r-123
+                      title: Sample digest
+                      createdAt: '2025-01-05T10:15:00Z'
+                    message: placeholder – implement data source later
+        '401':
+          description: Missing or invalid token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                unauthorized:
+                  value:
+                    message: Unauthorized
+        '404':
+          description: Report not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      summary: Create or update a report
+      operationId: upsertReport
+      description: |
+        The frontend uses this endpoint to persist edits to the report. The request
+        body mirrors the partial `Report`  structure currently sent from the UI.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportUpsertRequest'
+            examples:
+              updateTitle:
+                value:
+                  title: Updated digest title
+      responses:
+        '200':
+          description: Report stored successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportUpsertResponse'
+              examples:
+                success:
+                  value:
+                    id: r-123
+                    ok: true
+                    message: placeholder – create/update not implemented
+        '400':
+          description: Invalid payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Missing or invalid token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+components:
+  parameters:
+    ReportId:
+      name: id
+      in: path
+      required: true
+      description: Unique report identifier.
+      schema:
+        type: string
+  schemas:
+    Report:
+      type: object
+      description: Minimal report structure used in the UI today.
+      properties:
+        id:
+          type: string
+          description: Report identifier (mirrors the path parameter value).
+        title:
+          type: string
+          description: Human readable report title.
+        createdAt:
+          type: string
+          format: date-time
+          description: ISO-8601 timestamp when the report was generated.
+      required:
+        - id
+      additionalProperties: false
+    GetReportResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Echoes the requested report identifier.
+        report:
+          oneOf:
+            - $ref: '#/components/schemas/Report'
+            - type: 'null'
+          description: Populated report when available; `null`  while backend is a placeholder.
+        message:
+          type: string
+          description: Debugging note that will be removed once a real data source is wired in.
+      required:
+        - id
+        - report
+      additionalProperties: false
+    ReportUpsertRequest:
+      type: object
+      description: Attributes that the frontend can set when creating or updating a report.
+      properties:
+        title:
+          type: string
+          description: Report title shown in the dashboard.
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp supplied by the frontend when known.
+      additionalProperties: false
+    ReportUpsertResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Identifier of the report that was created or updated.
+        ok:
+          type: boolean
+          description: Indicates the request succeeded.
+        message:
+          type: string
+          description: Placeholder message until the backend is fully implemented.
+      required:
+        - id
+        - ok
+      additionalProperties: false
+    ErrorResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          description: Error message for the client.
+      required:
+        - message
+      additionalProperties: true
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: >-
+        Supply the `Authorization: Bearer <token>`  header. Matches the `DIGEST_TOKEN` 
+        configuration consumed by the frontend helper in `lib/auth.ts` .
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: digest-token
+      description: >-
+        Alternative to bearer tokens. The frontend helper will forward the first token
+        from `DIGEST_TOKEN`  as this cookie when available.

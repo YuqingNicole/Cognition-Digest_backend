@@ -1,0 +1,38 @@
+{
+  "name": "cognition-digest-backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "db:setup": "node scripts/setup-db.js"
+  },
+  "dependencies": {
+    "@fastify/cookie": "^10.0.0",
+    "@fastify/cors": "^10.0.1",
+    "@fastify/oauth2": "^8.1.2",
+    "@fastify/static": "^7.0.2",
+    "@sendgrid/mail": "^8.1.3",
+    "dotenv": "^16.4.5",
+    "fastify": "^5.0.0",
+    "fastify-plugin": "^5.0.1",
+    "jsonwebtoken": "^9.0.2",
+    "pg": "^8.13.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.12",
+    "@types/jsonwebtoken": "^9.0.6",
+    "@types/pg": "^8.11.10",
+    "eslint": "^9.9.0",
+    "typescript": "^5.6.2",
+    "tsx": "^4.19.1",
+    "vitest": "^2.1.3",
+    "supertest": "^7.0.0",
+    "@types/supertest": "^2.0.16"
+  }
+}
