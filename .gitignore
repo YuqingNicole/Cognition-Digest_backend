@@ -1,0 +1,28 @@
+# General
+.DS_Store
+.env
+.env.*
+*.log
+*.tmp
+.tmp/
+.cache/
+
+# Node
+node_modules/
+yarn.lock
+pnpm-lock.yaml
+package-lock.json
+.next/
+dist/
+build/
+
+# Python
+__pycache__/
+.venv/
+venv/
+*.pyc
+
+# OS/Editor
+.idea/
+.vscode/
+Thumbs.db
