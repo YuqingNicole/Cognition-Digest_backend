@@ -1,200 +1,589 @@
 openapi: 3.1.0
 info:
   title: Cognition Digest API
-  version: 0.1.0
-  description: |
-    OpenAPI contract inferred from the current Cognition Digest frontend integration.
-    Update this document whenever the frontend begins to rely on new endpoints or fields.
+  version: 1.0.0
+  description: RESTful API for Cognition Digest – Transform YouTube channels into structured reports and email digests.
+
 servers:
-  - url: http://localhost:3000
-    description: Local Next.js development server
-  - url: https://{domain}
-    description: Production deployment
-    variables:
-      domain:
-        default: example.com
-        description: Hostname where the app is deployed
-security:
-  - bearerAuth: []
-  - cookieAuth: []
-paths:
-  /api/report/{id}:
-    parameters:
-      - $ref: '#/components/parameters/ReportId'
-    get:
-      summary: Fetch a report by identifier
-      operationId: getReport
-      description: |
-        Returns a placeholder envelope that will eventually contain the report data
-        requested by the frontend dashboard. Until persistence is implemented the
-        `report`  field may be `null` .
-      responses:
-        '200':
-          description: Report envelope returned successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GetReportResponse'
-              examples:
-                example:
-                  value:
-                    id: r-123
-                    report:
-                      id: r-123
-                      title: Sample digest
-                      createdAt: '2025-01-05T10:15:00Z'
-                    message: placeholder – implement data source later
-        '401':
-          description: Missing or invalid token
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-              examples:
-                unauthorized:
-                  value:
-                    message: Unauthorized
-        '404':
-          description: Report not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-    post:
-      summary: Create or update a report
-      operationId: upsertReport
-      description: |
-        The frontend uses this endpoint to persist edits to the report. The request
-        body mirrors the partial `Report`  structure currently sent from the UI.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ReportUpsertRequest'
-            examples:
-              updateTitle:
-                value:
-                  title: Updated digest title
-      responses:
-        '200':
-          description: Report stored successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ReportUpsertResponse'
-              examples:
-                success:
-                  value:
-                    id: r-123
-                    ok: true
-                    message: placeholder – create/update not implemented
-        '400':
-          description: Invalid payload
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '401':
-          description: Missing or invalid token
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+  - url: https://api.cognitiondigest.com/v1
+    description: Production server
+  - url: http://localhost:4000
+    description: Local development server
+
 components:
-  parameters:
-    ReportId:
-      name: id
-      in: path
-      required: true
-      description: Unique report identifier.
-      schema:
-        type: string
-  schemas:
-    Report:
-      type: object
-      description: Minimal report structure used in the UI today.
-      properties:
-        id:
-          type: string
-          description: Report identifier (mirrors the path parameter value).
-        title:
-          type: string
-          description: Human readable report title.
-        createdAt:
-          type: string
-          format: date-time
-          description: ISO-8601 timestamp when the report was generated.
-      required:
-        - id
-      additionalProperties: false
-    GetReportResponse:
-      type: object
-      properties:
-        id:
-          type: string
-          description: Echoes the requested report identifier.
-        report:
-          oneOf:
-            - $ref: '#/components/schemas/Report'
-            - type: 'null'
-          description: Populated report when available; `null`  while backend is a placeholder.
-        message:
-          type: string
-          description: Debugging note that will be removed once a real data source is wired in.
-      required:
-        - id
-        - report
-      additionalProperties: false
-    ReportUpsertRequest:
-      type: object
-      description: Attributes that the frontend can set when creating or updating a report.
-      properties:
-        title:
-          type: string
-          description: Report title shown in the dashboard.
-        createdAt:
-          type: string
-          format: date-time
-          description: Creation timestamp supplied by the frontend when known.
-      additionalProperties: false
-    ReportUpsertResponse:
-      type: object
-      properties:
-        id:
-          type: string
-          description: Identifier of the report that was created or updated.
-        ok:
-          type: boolean
-          description: Indicates the request succeeded.
-        message:
-          type: string
-          description: Placeholder message until the backend is fully implemented.
-      required:
-        - id
-        - ok
-      additionalProperties: false
-    ErrorResponse:
-      type: object
-      properties:
-        message:
-          type: string
-          description: Error message for the client.
-      required:
-        - message
-      additionalProperties: true
   securitySchemes:
     bearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
-      description: >-
-        Supply the `Authorization: Bearer <token>`  header. Matches the `DIGEST_TOKEN` 
-        configuration consumed by the frontend helper in `lib/auth.ts` .
-    cookieAuth:
-      type: apiKey
-      in: cookie
-      name: digest-token
-      description: >-
-        Alternative to bearer tokens. The frontend helper will forward the first token
-        from `DIGEST_TOKEN`  as this cookie when available.
+      description: JWT token obtained from Google OAuth callback
+
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique user identifier
+        email:
+          type: string
+          format: email
+          description: User email address
+        name:
+          type: string
+          description: User display name
+      required:
+        - id
+        - email
+
+    Source:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique source identifier
+        title:
+          type: string
+          description: Channel or playlist title
+        youtube_id:
+          type: string
+          description: YouTube channel/playlist/video ID
+        type:
+          type: string
+          enum: [channel, playlist, video]
+          description: Type of YouTube source
+        is_whitelisted:
+          type: boolean
+          description: Whether this source is approved for processing
+      required:
+        - id
+        - youtube_id
+        - type
+
+    Subscription:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique subscription identifier
+        source_id:
+          type: string
+          description: Associated source ID
+        frequency:
+          type: string
+          enum: [each, weekly, monthly]
+          description: Digest delivery frequency
+        status:
+          type: string
+          enum: [active, paused, canceled]
+          description: Subscription status
+        send_time_local:
+          type: string
+          format: time
+          description: Preferred delivery time in user's timezone
+      required:
+        - id
+        - source_id
+        - frequency
+        - status
+
+    Report:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique report identifier
+        video_title:
+          type: string
+          description: Title of the video
+        tldr:
+          type: array
+          items:
+            type: string
+          description: Key takeaways (TL;DR)
+        outline:
+          type: array
+          items:
+            type: object
+            properties:
+              timestamp:
+                type: string
+              title:
+                type: string
+              summary:
+                type: string
+          description: Video outline with timestamps
+        claims:
+          type: array
+          items:
+            type: object
+            properties:
+              claim:
+                type: string
+              evidence:
+                type: string
+              confidence:
+                type: string
+                enum: [high, medium, low]
+          description: Factual claims with evidence
+        html_url:
+          type: string
+          format: uri
+          description: URL to HTML version of report
+        pdf_url:
+          type: string
+          format: uri
+          description: URL to PDF version of report
+      required:
+        - id
+        - video_title
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              description: Error code
+            message:
+              type: string
+              description: Human-readable error message
+          required:
+            - code
+            - message
+      required:
+        - error
+
+security:
+  - bearerAuth: []
+
+paths:
+  /auth/callback/google:
+    post:
+      summary: OAuth callback
+      description: Handle Google OAuth callback and issue JWT
+      security: []
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+                name:
+                  type: string
+                google_id:
+                  type: string
+              required:
+                - email
+                - google_id
+      responses:
+        '200':
+          description: Access token and user info
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access_token:
+                    type: string
+                    description: JWT access token
+                  token_type:
+                    type: string
+                    example: Bearer
+                  user:
+                    $ref: '#/components/schemas/User'
+                required:
+                  - access_token
+                  - token_type
+                  - user
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /sources/parse:
+    post:
+      summary: Parse a YouTube URL
+      description: Extract source information from a YouTube URL
+      tags:
+        - Sources
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                url:
+                  type: string
+                  format: uri
+                  description: YouTube URL (channel, playlist, or video)
+              required:
+                - url
+            examples:
+              channel:
+                value:
+                  url: https://www.youtube.com/@channel
+              video:
+                value:
+                  url: https://www.youtube.com/watch?v=xyz123
+      responses:
+        '200':
+          description: Parsed source info
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Source'
+        '400':
+          description: Invalid URL
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /sources:
+    get:
+      summary: List user sources
+      description: Get all YouTube sources added by the user
+      tags:
+        - Sources
+      responses:
+        '200':
+          description: List of sources
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Source'
+    post:
+      summary: Create source
+      description: Add a new YouTube source
+      tags:
+        - Sources
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Source'
+      responses:
+        '200':
+          description: Source created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Source'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /subscriptions:
+    get:
+      summary: List subscriptions
+      description: Get all user subscriptions
+      tags:
+        - Subscriptions
+      responses:
+        '200':
+          description: List of subscriptions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Subscription'
+    post:
+      summary: Create subscription
+      description: Subscribe to a source with specified frequency
+      tags:
+        - Subscriptions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Subscription'
+      responses:
+        '200':
+          description: Subscription created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subscription'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /subscriptions/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Subscription ID
+    patch:
+      summary: Update subscription
+      description: Modify subscription settings
+      tags:
+        - Subscriptions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [active, paused, canceled]
+                frequency:
+                  type: string
+                  enum: [each, weekly, monthly]
+                send_time_local:
+                  type: string
+                  format: time
+      responses:
+        '200':
+          description: Subscription updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subscription'
+        '404':
+          description: Subscription not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      summary: Delete subscription
+      description: Remove a subscription
+      tags:
+        - Subscriptions
+      responses:
+        '204':
+          description: Subscription deleted
+        '404':
+          description: Subscription not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /reports/onetime:
+    post:
+      summary: Generate one-time report
+      description: Create a report for a single video without subscription
+      tags:
+        - Reports
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                video_url:
+                  type: string
+                  format: uri
+                  description: YouTube video URL
+                lang:
+                  type: string
+                  description: Language code for report (e.g., en, zh, ja)
+                  default: en
+              required:
+                - video_url
+            examples:
+              english:
+                value:
+                  video_url: https://www.youtube.com/watch?v=xyz123
+                  lang: en
+              chinese:
+                value:
+                  video_url: https://www.youtube.com/watch?v=xyz123
+                  lang: zh
+      responses:
+        '202':
+          description: Task queued for processing
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  task_id:
+                    type: string
+                    description: Task identifier for status tracking
+                  status:
+                    type: string
+                    enum: [queued, processing]
+                    description: Current task status
+                required:
+                  - task_id
+                  - status
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /reports:
+    get:
+      summary: List reports
+      description: Get reports with optional filters
+      tags:
+        - Reports
+      parameters:
+        - name: source_id
+          in: query
+          schema:
+            type: string
+          description: Filter by source ID
+        - name: q
+          in: query
+          schema:
+            type: string
+          description: Search query
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date
+          description: Start date (YYYY-MM-DD)
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date
+          description: End date (YYYY-MM-DD)
+      responses:
+        '200':
+          description: List of reports
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Report'
+
+  /reports/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Report ID
+    get:
+      summary: Get report details
+      description: Retrieve full report with all sections
+      tags:
+        - Reports
+      responses:
+        '200':
+          description: Report detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
+        '404':
+          description: Report not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /feedback:
+    post:
+      summary: Submit feedback
+      description: Report issues or provide feedback on a report
+      tags:
+        - Feedback
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                report_id:
+                  type: string
+                  description: Report ID
+                section:
+                  type: string
+                  description: Report section (e.g., tldr, outline, claims)
+                issue_type:
+                  type: string
+                  enum: [inaccuracy, missing_info, formatting, other]
+                  description: Type of issue
+                note:
+                  type: string
+                  description: Additional details
+              required:
+                - report_id
+                - issue_type
+      responses:
+        '200':
+          description: Feedback received
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    description: Feedback ID
+                  status:
+                    type: string
+                    enum: [received, reviewing, resolved]
+                required:
+                  - id
+                  - status
+
+  /health:
+    get:
+      summary: Health check
+      description: Check system status and dependencies
+      security: []
+      tags:
+        - System
+      responses:
+        '200':
+          description: System status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [healthy, degraded, unhealthy]
+                  db:
+                    type: string
+                    enum: [connected, disconnected]
+                  redis:
+                    type: string
+                    enum: [connected, disconnected]
+                  uptime:
+                    type: string
+                    description: Server uptime
+                required:
+                  - status

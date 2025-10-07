@@ -16,7 +16,7 @@ export function buildApp() {
   const app = Fastify({ logger: true });
 
   // CORS configuration for frontend integration
-  const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
+  const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3004";
   void app.register(cors, {
     origin: frontendUrl,
     credentials: true, // Allow cookies to be sent
@@ -32,13 +32,26 @@ export function buildApp() {
   void app.register(reportRoutes);
 
   // Public routes (no auth) - registered at root level
+  // Resolve project root - works in both dev (tsx) and production (compiled)
   const projectRoot = path.resolve(__dirname, "..", "..");
   const openapiDir = path.join(projectRoot, "openapi");
 
   app.get("/openapi.yaml", async (_req, reply) => {
-    const filePath = path.join(openapiDir, "openapi.yaml");
-    const content = await fs.readFile(filePath, "utf8");
-    return reply.type("application/yaml").send(content);
+    try {
+      const filePath = path.join(openapiDir, "openapi.yaml");
+      const content = await fs.readFile(filePath, "utf8");
+      return reply.type("application/yaml").send(content);
+    } catch (error: any) {
+      // Try alternative path for development mode
+      const altPath = path.join(process.cwd(), "openapi", "openapi.yaml");
+      try {
+        const content = await fs.readFile(altPath, "utf8");
+        return reply.type("application/yaml").send(content);
+      } catch {
+        app.log.error(`Failed to load openapi.yaml: ${error.message}`);
+        return reply.code(500).send({ error: "Failed to load OpenAPI specification" });
+      }
+    }
   });
 
   app.get("/docs", async (_req, reply) => {
